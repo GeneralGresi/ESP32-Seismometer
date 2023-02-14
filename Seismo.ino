@@ -5,14 +5,9 @@
 
 #define WIFI_TIMEOUT_DEF 30
 #define PERIOD_READ_MICROSECS 100                //Counting period 
-#define WDT_TIMEOUT 10
 
 
 #define DEVICE "Sensor01"
-
-#define INFLUXDB_TOKEN "<your influx token>"
-#define WIFI_SSID "xxx"
-#define WIFI_PASSWORD "xxx"
 
 #define TZ_INFO "CET-1CEST,M3.5.0,M10.5.0/3"
 
