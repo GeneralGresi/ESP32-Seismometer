@@ -82,16 +82,16 @@ void setup() {
   lastWriteTime = lastTimeSyncTime = millis();
 
   xTaskCreatePinnedToCore(
-      PostToInflux, /* Function to implement the task */
+      postToInflux, /* Function to implement the task */
       "PostToInflux", /* Name of the task */
       10000,  /* Stack size in words */
       NULL,  /* Task input parameter */
       0,  /* Priority of the task */
       &Task1,  /* Task handle. */
-      1); /* Core where the task should run */
+      0); /* Core where the task should run */
 }
 
-void PostToInflux( void * parameter) {
+void postToInflux( void * parameter) {
   syncToNTP();
   while (true) {
       if ((unsigned long)(millis() - lastWriteTime) > PERIOD_WRITE) {
@@ -118,9 +118,7 @@ int readInputs() {
 }
 
 
-
-void loop() {
-  
+void loop() {  
   if ((unsigned long)(micros() - lastReadTime) > PERIOD_READ_MICROSECS) {
     int inputValue = readInputs();
     seismo.clearFields();
