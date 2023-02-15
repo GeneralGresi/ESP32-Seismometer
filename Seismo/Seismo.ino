@@ -4,7 +4,8 @@
 
 
 #define WIFI_TIMEOUT_DEF 30
-#define PERIOD_READ_MICROSECS 100                //Counting period 
+#define PERIOD_READ_MICROSECS 100                //Reading period 
+#define PERIOD_WRITE 100                //WRITING period 
 
 
 #define DEVICE "Sensor01"
@@ -22,9 +23,20 @@ InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKE
 Point seismo("Seismometer");
 
 
+TaskHandle_t Task1;
 
-
+unsigned long lastReadTime;
 unsigned long lastWriteTime;
+
+
+unsigned long lastTimeSyncTime;
+void syncToNTP() {
+  if ((unsigned long)(millis() - lastTimeSyncTime) > 3600000) { //Sync every hour
+    timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
+    lastTimeSyncTime = millis();
+  }
+}
+
 
 void software_Reset() // Restarts program from beginning but does not reset the peripherals and registers
 {
@@ -62,11 +74,30 @@ void setup() {
   
   delay(50);
 
-  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::MS));
+  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::US));
   client.setWriteOptions(WriteOptions().batchSize(1000));
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
   
-  lastWriteTime=millis();
+  lastReadTime=micros();
+  lastWriteTime = lastTimeSyncTime = millis();
+
+  xTaskCreatePinnedToCore(
+      PostToInflux, /* Function to implement the task */
+      "PostToInflux", /* Name of the task */
+      10000,  /* Stack size in words */
+      NULL,  /* Task input parameter */
+      0,  /* Priority of the task */
+      &Task1,  /* Task handle. */
+      1); /* Core where the task should run */
+}
+
+void PostToInflux( void * parameter) {
+  while (true) {
+      if ((unsigned long)(millis() - lastWriteTime) > PERIOD_WRITE) {
+        client.flushBuffer();
+        lastWriteTime = millis();
+      }
+  }
 }
 
 
@@ -85,15 +116,16 @@ int readInputs() {
   }
 }
 
+
+
 void loop() {
-  if (lastCountTime > micros()) {
-    lastCountTime = 0; //Reset counter
-  }
-  if (micros() > lastCountTime + PERIOD_READ_MICROSECS) {
-    int value = readInputs();
+  syncToNTP();
+
+  if ((unsigned long)(micros() - lastReadTime) > PERIOD_READ_MICROSECS) {
+    int inputValue = readInputs();
     seismo.clearFields();
-    seismo.addField("reading", value);
+    seismo.addField("reading", inputValue);
     client.writePoint(seismo);
-    lastCountTime = micros();
+    lastReadTime = micros();
   }
 }
