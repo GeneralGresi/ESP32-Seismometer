@@ -75,29 +75,21 @@ void setup() {
   delay(50);
 
   client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::US));
-  client.setWriteOptions(WriteOptions().batchSize(1000));
+  client.setWriteOptions(WriteOptions().batchSize(100));
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
   
   lastReadTime=micros();
   lastWriteTime = lastTimeSyncTime = millis();
 
-  xTaskCreatePinnedToCore(
-      postToInflux, /* Function to implement the task */
-      "PostToInflux", /* Name of the task */
-      10000,  /* Stack size in words */
-      NULL,  /* Task input parameter */
-      0,  /* Priority of the task */
-      &Task1,  /* Task handle. */
-      0); /* Core where the task should run */
 }
 
-void postToInflux( void * parameter) {
+void postToInflux() {
   syncToNTP();
-  while (true) {
-      if ((unsigned long)(millis() - lastWriteTime) > PERIOD_WRITE) {
-        client.flushBuffer();
-        lastWriteTime = millis();
-      }
+  if ((unsigned long)(millis() - lastWriteTime) > PERIOD_WRITE) {
+    if (!client.isBufferEmpty()) {
+      client.flushBuffer();
+    }
+    lastWriteTime = millis();
   }
 }
 
@@ -126,4 +118,5 @@ void loop() {
     client.writePoint(seismo);
     lastReadTime = micros();
   }
+  postToInflux();
 }
