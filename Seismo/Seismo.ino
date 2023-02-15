@@ -92,6 +92,7 @@ void setup() {
 }
 
 void PostToInflux( void * parameter) {
+  syncToNTP();
   while (true) {
       if ((unsigned long)(millis() - lastWriteTime) > PERIOD_WRITE) {
         client.flushBuffer();
@@ -119,8 +120,7 @@ int readInputs() {
 
 
 void loop() {
-  syncToNTP();
-
+  
   if ((unsigned long)(micros() - lastReadTime) > PERIOD_READ_MICROSECS) {
     int inputValue = readInputs();
     seismo.clearFields();
