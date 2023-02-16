@@ -6,7 +6,7 @@
 
 
 #define WIFI_TIMEOUT_DEF 30
-#define PERIOD_READ_MICROSECS 200                //Reading period 
+#define PERIOD_READ_US 300                //Reading period 
 #define PERIOD_WRITE 10                //WRITING period 
 
 
@@ -58,7 +58,7 @@ void software_Reset() // Restarts program from beginning but does not reset the 
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(500000);
 
 
   Serial.println("Connecting to Wi-Fi");
@@ -86,7 +86,7 @@ void setup() {
 
  
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
-  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::US).batchSize(100).useServerTimestamp(false));
+  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::MS).batchSize(100).useServerTimestamp(false));
   
   lastReadTime=micros();
   lastTimeSyncTime = lastWriteTime = millis();
@@ -121,22 +121,26 @@ void dataToQueue( void * parameter) {
   BaseType_t xStatus;
   Data dataPoint;
   while (true) {
-      esp_task_wdt_reset();
-      if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_MICROSECS) {
-        lastReadTime = micros();
-        dataPoint.timestamp = getMicros();
-        int inputValue = readInputs();
-        dataPoint.value = inputValue;
-        xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );  
+    esp_task_wdt_reset();
+    Serial.println(micros() - lastReadTime);
+    if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
+      lastReadTime = micros();
+      dataPoint.timestamp = getMillis();
+      Serial.println(dataPoint.timestamp);
+      int inputValue = readInputs();
+      dataPoint.value = inputValue;
+      xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );  
+    } else {
+      delayMicroseconds(PERIOD_READ_US/10);
     }
   }
 }
 
 
-unsigned long long getMicros() {
+unsigned long long getMillis() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return ((unsigned long long)((tv.tv_sec * 1000000LL) + tv.tv_usec));
+  return ((unsigned long long)((tv.tv_sec * 1000LL) + (tv.tv_usec / 1000LL)));
 }
 
 
@@ -175,13 +179,10 @@ void postToInflux(void * parameter) {
       //Serial.println(dataPoint.timestamp + ": " + dataPoint.value);
       client.writePoint(point);
     }
-    if ((unsigned long)(millis() - lastWriteTime) > PERIOD_WRITE) {
-      //client.flushBuffer();
-      lastWriteTime = millis();
-    }
   }
 }
 
 void loop() {
-  vTaskDelete(NULL);
+  esp_task_wdt_reset();
+  delay(10);
 }
