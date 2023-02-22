@@ -3,10 +3,13 @@
 #include <InfluxDbClient.h>
 #include "time.h"
 #include <esp_task_wdt.h>
+#include "driver/adc.h"
+#include "esp_adc_cal.h""
 
 
 #define WIFI_TIMEOUT_DEF 30
-#define PERIOD_READ_US 300                //Reading period 
+#define PERIOD_READ_US 4500
+#define PERIOD_READ_US_FULL 4900 //Reading period 
 #define PERIOD_WRITE 10                //WRITING period 
 
 
@@ -25,6 +28,26 @@ typedef struct{
 }Data;
 
 
+esp_adc_cal_characteristics_t adc1_chars;
+
+
+const int WINDOW_SIZE  = 100;
+const int WINDOW_SIZE_OUT  = 5;
+
+int readingsX1000 [WINDOW_SIZE];
+int readingsX100 [WINDOW_SIZE];
+int readingsX10 [WINDOW_SIZE];
+int readIndexX1000  = 0;
+int readIndexX100  = 0;
+int readIndexX10 = 0;
+int totalX1000 = 0;
+int totalX100 = 0;
+int totalX10 = 0;
+
+
+int readingsOut [WINDOW_SIZE_OUT];
+int readIndexOut = 0;
+int totalOut = 0;
 
 
 unsigned long lastReadTime;
@@ -32,6 +55,42 @@ unsigned long lastWriteTime;
 unsigned long lastTimeSyncTime;
   
 
+
+long smoothX1000(int value) {
+  totalX1000 = totalX1000 - readingsX1000[readIndexX1000];       // Remove the oldest entry from the sum
+  readingsX1000[readIndexX1000] = value;           // Add the newest reading to the window
+  totalX1000 = totalX1000 + value;                 // Add the newest reading to the sum
+  readIndexX1000 = (readIndexX1000+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
+
+  return totalX1000 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
+}
+
+long smoothX100(int value) {
+  totalX100 = totalX100 - readingsX100[readIndexX100];       // Remove the oldest entry from the sum
+  readingsX100[readIndexX100] = value;           // Add the newest reading to the window
+  totalX100 = totalX100 + value;                 // Add the newest reading to the sum
+  readIndexX100 = (readIndexX100+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
+
+  return totalX100 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
+}
+
+long smoothX10(int value) {
+  totalX10 = totalX10 - readingsX10[readIndexX10];       // Remove the oldest entry from the sum
+  readingsX10[readIndexX10] = value;           // Add the newest reading to the window
+  totalX10 = totalX10 + value;                 // Add the newest reading to the sum
+  readIndexX10 = (readIndexX10+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
+
+  return totalX10 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
+}
+
+long smoothOutput(int value) {
+  totalOut = totalOut - readingsOut[readIndexOut];       // Remove the oldest entry from the sum
+  readingsOut[readIndexOut] = value;           // Add the newest reading to the window
+  totalOut = totalOut + value;                 // Add the newest reading to the sum
+  readIndexOut = (readIndexOut+1) % WINDOW_SIZE_OUT;   // Increment the index, and wrap to 0 if it exceeds the window size
+
+  return totalOut / WINDOW_SIZE_OUT;      // Divide the sum of the window by the window size for the resul
+}
 
 
 
@@ -81,6 +140,10 @@ void setup() {
   Serial.println(WiFi.localIP());
   delay(50);
 
+
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
+  esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 0, &adc1_chars);
   
   xQueue = xQueueCreate(100, sizeof(Point));
 
@@ -124,14 +187,16 @@ void dataToQueue( void * parameter) {
     esp_task_wdt_reset();
     Serial.println(micros() - lastReadTime);
     if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
-      lastReadTime = micros();
+      unsigned long delayLeft = PERIOD_READ_US_FULL - (micros() - lastReadTime);
+      if (delayLeft < 5000) {
+        delayMicroseconds(delayLeft);
+      }
       dataPoint.timestamp = getMillis();
       Serial.println(dataPoint.timestamp);
       int inputValue = readInputs();
       dataPoint.value = inputValue;
-      xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );  
-    } else {
-      delayMicroseconds(PERIOD_READ_US/10);
+      xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
+      lastReadTime = micros();  
     }
   }
 }
@@ -145,17 +210,32 @@ unsigned long long getMillis() {
 
 
 int readInputs() {
-  int x1000 = analogRead(inputPinX1000);
-  if (x1000 == 1023) {
-    int x100 = analogRead(inputPinX100);
-    if (x100 == 1023) {
-      int x10 = analogRead(inputPinX10);
-      return x10 * 100;
+  int curMiddle = map(adc1_get_raw(ADC1_CHANNEL_7), 0 ,4095,-1000,1000);
+
+  int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000,1000) - curMiddle;
+  int x1000avg = smoothX1000(x1000); 
+  x1000 -= x1000avg;
+
+  //x1000 *= 20;
+  
+  int x100   =  map(adc1_get_raw(ADC1_CHANNEL_3),0,4095,-1000,1000) - curMiddle;
+  int x100avg = smoothX100(x100);
+  x100 -= x100avg;
+
+  //x100 *= 20;
+  
+  int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000,1000) - curMiddle;
+  int x10avg = smoothX10(x10);
+  x10 -= x10avg;
+
+  if (abs(x1000) == 1000) {
+    if (abs(x100) == 1000) {
+      return smoothOutput(x10 * 100);
     } else {
-      return x100 * 10;
+      return smoothOutput(x100 * 10);
     }
   } else {
-    return x1000;
+    return smoothOutput(x1000);
   }
 }
 
