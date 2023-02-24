@@ -264,5 +264,6 @@ void postToInflux(void * parameter) {
 
 void loop() {
   esp_task_wdt_reset();
+  if (WiFi.status()!= WL_CONNECTED) software_Reset();
   delay(10);
 }
