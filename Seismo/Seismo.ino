@@ -31,8 +31,7 @@ typedef struct{
 esp_adc_cal_characteristics_t adc1_chars;
 
 
-const int WINDOW_SIZE  = 2000;
-const int WINDOW_SIZE_OUT  = 5;
+const int WINDOW_SIZE  = 500;
 
 int readingsX1000 [WINDOW_SIZE];
 int readingsX100 [WINDOW_SIZE];
@@ -44,19 +43,13 @@ int totalX1000 = 0;
 int totalX100 = 0;
 int totalX10 = 0;
 
-
-int readingsOut [WINDOW_SIZE_OUT];
-int readIndexOut = 0;
-int totalOut = 0;
-
-
 unsigned long lastReadTime;
 unsigned long lastWriteTime;
 unsigned long lastTimeSyncTime;
   
 
 
-long smoothX1000(int value) {
+long avgX1000(int value) {
   totalX1000 = totalX1000 - readingsX1000[readIndexX1000];       // Remove the oldest entry from the sum
   readingsX1000[readIndexX1000] = value;           // Add the newest reading to the window
   totalX1000 = totalX1000 + value;                 // Add the newest reading to the sum
@@ -65,7 +58,7 @@ long smoothX1000(int value) {
   return totalX1000 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
 }
 
-long smoothX100(int value) {
+long avgX100(int value) {
   totalX100 = totalX100 - readingsX100[readIndexX100];       // Remove the oldest entry from the sum
   readingsX100[readIndexX100] = value;           // Add the newest reading to the window
   totalX100 = totalX100 + value;                 // Add the newest reading to the sum
@@ -74,7 +67,7 @@ long smoothX100(int value) {
   return totalX100 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
 }
 
-long smoothX10(int value) {
+long avgX10(int value) {
   totalX10 = totalX10 - readingsX10[readIndexX10];       // Remove the oldest entry from the sum
   readingsX10[readIndexX10] = value;           // Add the newest reading to the window
   totalX10 = totalX10 + value;                 // Add the newest reading to the sum
@@ -83,14 +76,6 @@ long smoothX10(int value) {
   return totalX10 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
 }
 
-long smoothOutput(int value) {
-  totalOut = totalOut - readingsOut[readIndexOut];       // Remove the oldest entry from the sum
-  readingsOut[readIndexOut] = value;           // Add the newest reading to the window
-  totalOut = totalOut + value;                 // Add the newest reading to the sum
-  readIndexOut = (readIndexOut+1) % WINDOW_SIZE_OUT;   // Increment the index, and wrap to 0 if it exceeds the window size
-
-  return totalOut / WINDOW_SIZE_OUT;      // Divide the sum of the window by the window size for the resul
-}
 
 
 
@@ -211,32 +196,37 @@ unsigned long long getMillis() {
 
 
 int readInputs() {
-  int curMiddle = map(adc1_get_raw(ADC1_CHANNEL_7), 0 ,4095,-1000,1000);
+  int curMiddle = map(adc1_get_raw(ADC1_CHANNEL_7),0,4095,-1000,1000);
 
-  int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000,1000) - curMiddle;
-  int x1000avg = smoothX1000(x1000); 
+
+  
+  int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000+curMiddle,1000+curMiddle)-curMiddle;
+  //Serial.println(x1000);
+  int x1000avg = avgX1000(x1000); 
   x1000 -= x1000avg;
-
+  
   //x1000 *= 20;
   
-  int x100   =  map(adc1_get_raw(ADC1_CHANNEL_3),0,4095,-1000,1000) - curMiddle;
-  int x100avg = smoothX100(x100);
+  int x100   =  map(adc1_get_raw(ADC1_CHANNEL_3),0,4095,-1000+curMiddle,1000+curMiddle)-curMiddle;
+  int x100avg = avgX100(x100);
   x100 -= x100avg;
+  
+
 
   //x100 *= 20;
   
-  int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000,1000) - curMiddle;
-  int x10avg = smoothX10(x10);
+  int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000+curMiddle,1000+curMiddle)-curMiddle;
+  int x10avg = avgX10(x10);
   x10 -= x10avg;
 
-  if (abs(x1000) == 1000) {
-    if (abs(x100) == 1000) {
-      return smoothOutput(x10 * 100);
+  if (x1000 >= 800 + x1000avg || x1000 <= -800 + x1000avg) {
+    if (x100 >= 800 + x100avg || x100 <= -800 + x100avg) {
+      return x10*100;
     } else {
-      return smoothOutput(x100 * 10);
+      return x100*10;
     }
   } else {
-    return smoothOutput(x1000);
+    return x1000;
   }
 }
 
