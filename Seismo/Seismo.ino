@@ -31,7 +31,7 @@ typedef struct{
 esp_adc_cal_characteristics_t adc1_chars;
 
 
-const int WINDOW_SIZE  = 100;
+const int WINDOW_SIZE  = 2000;
 const int WINDOW_SIZE_OUT  = 5;
 
 int readingsX1000 [WINDOW_SIZE];
@@ -185,16 +185,17 @@ void dataToQueue( void * parameter) {
   Data dataPoint;
   while (true) {
     esp_task_wdt_reset();
-    Serial.println(micros() - lastReadTime);
+    //Serial.println(micros() - lastReadTime);
     if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
       unsigned long delayLeft = PERIOD_READ_US_FULL - (micros() - lastReadTime);
       if (delayLeft < 5000) {
         delayMicroseconds(delayLeft);
       }
       dataPoint.timestamp = getMillis();
-      Serial.println(dataPoint.timestamp);
+      //Serial.println(dataPoint.timestamp);
       int inputValue = readInputs();
       dataPoint.value = inputValue;
+      Serial.println(inputValue);
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
       lastReadTime = micros();  
     }
