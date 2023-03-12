@@ -170,17 +170,14 @@ void dataToQueue( void * parameter) {
   Data dataPoint;
   while (true) {
     esp_task_wdt_reset();
-    //Serial.println(micros() - lastReadTime);
     if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
       unsigned long delayLeft = PERIOD_READ_US_FULL - (micros() - lastReadTime);
       if (delayLeft < 5000) {
         delayMicroseconds(delayLeft);
       }
       dataPoint.timestamp = getMillis();
-      //Serial.println(dataPoint.timestamp);
       int inputValue = readInputs();
       dataPoint.value = inputValue;
-      Serial.println(inputValue);
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
       lastReadTime = micros();  
     }
