@@ -43,6 +43,8 @@ int totalX1000 = 0;
 int totalX100 = 0;
 int totalX10 = 0;
 
+
+
 unsigned long lastReadTime;
 unsigned long lastWriteTime;
 unsigned long lastTimeSyncTime;
@@ -75,8 +77,6 @@ long avgX10(int value) {
 
   return totalX10 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
 }
-
-
 
 
 TaskHandle_t Task1;
@@ -150,7 +150,7 @@ void setup() {
       0,  /* Priority of the task */
       &Task1,  /* Task handle. */
       0); /* Core where the task should run */
-      
+  
   xTaskCreatePinnedToCore(
       postToInflux, /* Function to implement the task */
       "postToInflux", /* Name of the task */
@@ -159,7 +159,7 @@ void setup() {
       2,  /* Priority of the task */
       &Task2,  /* Task handle. */
       1); /* Core where the task should run */
-
+  
 }
 
 
@@ -177,6 +177,7 @@ void dataToQueue( void * parameter) {
       }
       dataPoint.timestamp = getMillis();
       int inputValue = readInputs();
+      Serial.println(inputValue);
       dataPoint.value = inputValue;
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
       lastReadTime = micros();  
@@ -192,32 +193,33 @@ unsigned long long getMillis() {
 }
 
 
+int mapOutMiddle(int middle, int value) {
+  if (value <= middle) {
+    return map(value, -1000, middle, -1000 , 0);
+  } else {
+    return map(value, middle, 1000, 0, 1000);
+  }
+}
+
 int readInputs() {
-  int curMiddle = map(adc1_get_raw(ADC1_CHANNEL_7),0,4095,-1000,1000);
+   int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000,1000);
+
+  x1000 = mapOutMiddle(avgX1000(x1000),x1000); 
 
 
   
-  int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000+curMiddle,1000+curMiddle)-curMiddle;
-  //Serial.println(x1000);
-  int x1000avg = avgX1000(x1000); 
-  x1000 -= x1000avg;
-  
-  //x1000 *= 20;
-  
-  int x100   =  map(adc1_get_raw(ADC1_CHANNEL_3),0,4095,-1000+curMiddle,1000+curMiddle)-curMiddle;
-  int x100avg = avgX100(x100);
-  x100 -= x100avg;
-  
+  int x100   =  map(adc1_get_raw(ADC1_CHANNEL_3),0,4095,-1000,1000);
+  x100 = mapOutMiddle(avgX100(x100),x100); 
 
 
-  //x100 *= 20;
-  
-  int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000+curMiddle,1000+curMiddle)-curMiddle;
-  int x10avg = avgX10(x10);
-  x10 -= x10avg;
 
-  if (x1000 >= 800 + x1000avg || x1000 <= -800 + x1000avg) {
-    if (x100 >= 800 + x100avg || x100 <= -800 + x100avg) {
+
+  int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000,1000);
+  x10 = mapOutMiddle(avgX10(x10),x10); 
+
+
+  if (x1000 >= 1000 || x1000 <= -1000) {
+    if (x100 >= 1000 || x100 <= -1000) {
       return x10*100;
     } else {
       return x100*10;
