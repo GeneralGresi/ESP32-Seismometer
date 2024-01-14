@@ -8,8 +8,8 @@
 
 
 #define WIFI_TIMEOUT_DEF 30
-#define PERIOD_READ_US 900
-#define PERIOD_READ_US_FULL 1000 //Reading period 
+#define PERIOD_READ_US 4500
+#define PERIOD_READ_US_FULL 4900 //Reading period 
 #define PERIOD_WRITE 10                //WRITING period 
 #define CUTOFFFREQUENCY 35 //in hertz
 
