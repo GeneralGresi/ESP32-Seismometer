@@ -11,6 +11,7 @@
 #define PERIOD_READ_US 4500
 #define PERIOD_READ_US_FULL 4900 //Reading period 
 #define PERIOD_WRITE 10                //WRITING period 
+#define CUTOFFFREQUENCY 35 //in hertz
 
 
 #define DEVICE "Sensor01"
@@ -44,10 +45,17 @@ int totalX100 = 0;
 int totalX10 = 0;
 
 
+int filteredX10 = 0;
+int filteredX100 = 0;
+int filteredX1000 = 0;
+
+
 
 unsigned long lastReadTime;
 unsigned long lastWriteTime;
 unsigned long lastTimeSyncTime;
+
+float alpha; //for lowpass;
   
 
 
@@ -125,7 +133,10 @@ void setup() {
   Serial.println(WiFi.localIP());
   delay(50);
 
-
+  float tau = 1.0 / (2.0 * PI * (float)CUTOFFFREQUENCY);
+  float readPeriodInSeconds = PERIOD_READ_US_FULL / 1000.0 / 1000.0;
+  alpha = readPeriodInSeconds / (readPeriodInSeconds + tau); 
+  
   adc1_config_width(ADC_WIDTH_BIT_12);
   adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 0, &adc1_chars);
@@ -201,20 +212,30 @@ int mapOutMiddle(int middle, int value) {
   }
 }
 
-int readInputs() {
-   int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000,1000);
+int cutOffFilter(int raw, int filteredValue) {
+  return (float)alpha * (float)raw + (float)(1.0 - alpha) * (float)filteredValue;
+}
 
+int readInputs() {
+  int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000,1000);
+  
+  x1000 = cutOffFilter(x1000, filteredX1000);
+  filteredX1000 = x1000;
   x1000 = mapOutMiddle(avgX1000(x1000),x1000); 
 
 
   
   int x100   =  map(adc1_get_raw(ADC1_CHANNEL_3),0,4095,-1000,1000);
+  x100 = cutOffFilter(x100, filteredX100);
+  filteredX100 = x100;
   x100 = mapOutMiddle(avgX100(x100),x100); 
 
 
 
 
   int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000,1000);
+  x10 = cutOffFilter(x10, filteredX10);
+  filteredX10 = x10;
   x10 = mapOutMiddle(avgX10(x10),x10); 
 
 
