@@ -3,15 +3,20 @@
 #include <InfluxDbClient.h>
 #include "time.h"
 #include <esp_task_wdt.h>
+#include <WebServer.h>
+#include <ElegantOTA.h>
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 
+#define fwversion 20240116
 
 #define WIFI_TIMEOUT_DEF 30
 #define PERIOD_READ_US 4500
 #define PERIOD_READ_US_FULL 4900 //Reading period 
 #define PERIOD_WRITE 10                //WRITING period 
 #define CUTOFFFREQUENCY 35 //in hertz
+
+const char* esp_hostname = "ESP32_Seismometer01";
 
 
 #define DEVICE "Sensor01"
@@ -93,6 +98,8 @@ xQueueHandle xQueue;
 
 InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN);
 
+WebServer server(80);
+
 
 void syncToNTP() {
   if ((unsigned long)(millis() - lastTimeSyncTime) > 3600000) { //Sync every hour
@@ -109,12 +116,25 @@ void software_Reset() // Restarts program from beginning but does not reset the 
   ESP.restart();
 }
 
-void setup() {
-  Serial.begin(500000);
+
+void otaSetup() {
+
+  server.on("/", []() {
+    server.send(200, "text/plain", "Device: " + String(esp_hostname) + ", Firmware Version: " + String(fwversion));
+  });
+  
+  ElegantOTA.setAuth(otaUser, otaPass);
+  ElegantOTA.begin(&server);
+  server.begin();
+}
 
 
-  Serial.println("Connecting to Wi-Fi");
+void setupWifi() {
+  Serial.print("Connecting to ");
+  Serial.println(WIFI_SSID);
+  
   WiFi.mode(WIFI_STA);
+  WiFi.hostname(esp_hostname);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int wifi_loops = 0;
@@ -127,11 +147,19 @@ void setup() {
   }
   Serial.println();
   Serial.println("Wi-Fi Connected");
-  timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
-
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+  
+  timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
+
   delay(50);
+
+}
+
+void setup() {
+  Serial.begin(500000);
+  setupWifi();
+  otaSetup();
 
   float tau = 1.0 / (2.0 * PI * (float)CUTOFFFREQUENCY);
   float readPeriodInSeconds = PERIOD_READ_US_FULL / 1000.0 / 1000.0;
@@ -273,8 +301,15 @@ void postToInflux(void * parameter) {
   }
 }
 
+void otaLoop() {
+  server.handleClient();
+  ElegantOTA.loop();
+}
+
+
 void loop() {
   esp_task_wdt_reset();
   if (WiFi.status()!= WL_CONNECTED) software_Reset();
+  otaLoop();
   delay(10);
 }

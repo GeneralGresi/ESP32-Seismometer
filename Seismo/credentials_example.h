@@ -4,3 +4,5 @@
 #define INFLUXDB_URL "http://yourinfluxinstance:8086"
 #define INFLUXDB_ORG "ORGANISATION"
 #define INFLUXDB_BUCKET "BUCKET"
+#define otaUser "xxx"
+#define otaPass "xxx"
