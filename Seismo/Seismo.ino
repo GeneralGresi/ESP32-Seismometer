@@ -172,7 +172,7 @@ void setup() {
   adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 0, &adc1_chars);
   
-  xQueue = xQueueCreate(1000, sizeof(Point));
+  xQueue = xQueueCreate(500, sizeof(Point));
 
  
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
@@ -182,7 +182,7 @@ void setup() {
   lastTimeSyncTime = lastWriteTime = millis();
 
   esp_task_wdt_init(10, true); 
-  
+
   
   xTaskCreatePinnedToCore(
       dataToQueue, /* Function to implement the task */
@@ -192,6 +192,7 @@ void setup() {
       0,  /* Priority of the task */
       &Task1,  /* Task handle. */
       0); /* Core where the task should run */
+
   
   xTaskCreatePinnedToCore(
       postToInflux, /* Function to implement the task */
@@ -224,7 +225,6 @@ void dataToQueue( void * parameter) {
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
       lastReadTime = micros();  
     }
-    delay(1);
   }
 }
 
@@ -293,6 +293,10 @@ void postToInflux(void * parameter) {
   while(true) {
     esp_task_wdt_reset();
     syncToNTP();
+
+    setupWifi();
+    otaLoop();
+    
     Data dataPoint;
     if (WiFi.status()!= WL_CONNECTED) {
       continue; //don't process the queue if we're not connected.
@@ -305,7 +309,6 @@ void postToInflux(void * parameter) {
       //Serial.println(dataPoint.timestamp + ": " + dataPoint.value);
       client.writePoint(point);
     }
-    delay(1);
   }
 }
 
@@ -317,7 +320,5 @@ void otaLoop() {
 
 void loop() {
   esp_task_wdt_reset();
-  setupWifi();
-  otaLoop();
   delay(10);
 }
