@@ -8,7 +8,7 @@
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 
-#define fwversion 20240116
+#define fwversion 20240116-1015
 
 #define PERIOD_READ_US 4500
 #define PERIOD_READ_US_FULL 4900 //Reading period 
@@ -158,7 +158,7 @@ void setup() {
   adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 0, &adc1_chars);
   
-  xQueue = xQueueCreate(500, sizeof(Point));
+  xQueue = xQueueCreate(1000, sizeof(Point));
 
  
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
