@@ -10,7 +10,6 @@
 
 #define fwversion 20240116
 
-#define WIFI_TIMEOUT_DEF 30
 #define PERIOD_READ_US 4500
 #define PERIOD_READ_US_FULL 4900 //Reading period 
 #define PERIOD_WRITE 10                //WRITING period 
@@ -109,13 +108,6 @@ void syncToNTP() {
 }
 
 
-void software_Reset() // Restarts program from beginning but does not reset the peripherals and registers
-{
-  Serial.println("Software reset");
-  delay(1000);
-  ESP.restart();
-}
-
 
 void otaSetup() {
 
@@ -137,13 +129,10 @@ void setupWifi() {
   WiFi.hostname(esp_hostname);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  int wifi_loops = 0;
-  int wifi_timeout = WIFI_TIMEOUT_DEF;
   while (WiFi.status() != WL_CONNECTED) {
-    wifi_loops++;
+    esp_task_wdt_reset();
     Serial.print(".");
     delay(500);
-    if (wifi_loops > wifi_timeout) software_Reset();
   }
   Serial.println();
   Serial.println("Wi-Fi Connected");
@@ -169,7 +158,7 @@ void setup() {
   adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 0, &adc1_chars);
   
-  xQueue = xQueueCreate(100, sizeof(Point));
+  xQueue = xQueueCreate(500, sizeof(Point));
 
  
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
@@ -290,6 +279,9 @@ void postToInflux(void * parameter) {
     esp_task_wdt_reset();
     syncToNTP();
     Data dataPoint;
+    if (WiFi.status()!= WL_CONNECTED) {
+      continue; //don't process the queue if we're not connected.
+    }
     xStatus = xQueueReceive( xQueue, &dataPoint, xTicksToWait );
     if(xStatus == pdPASS) {
       point.clearFields();
@@ -309,7 +301,9 @@ void otaLoop() {
 
 void loop() {
   esp_task_wdt_reset();
-  if (WiFi.status()!= WL_CONNECTED) software_Reset();
+  if (WiFi.status()!= WL_CONNECTED) {
+    setupWifi();
+  }
   otaLoop();
   delay(10);
 }
