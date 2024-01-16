@@ -8,7 +8,7 @@
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 
-#define fwversion 20240116-1015
+#define fwversion 20240116-1658
 
 #define PERIOD_READ_US 4500
 #define PERIOD_READ_US_FULL 4900 //Reading period 
@@ -118,6 +118,16 @@ void otaSetup() {
   });
   
   ElegantOTA.setAuth(otaUser, otaPass);
+  ElegantOTA.onEnd([](bool success) {
+    if (success) {
+      Serial.println("OTA update completed successfully.");
+    } else {
+      Serial.println("OTA update failed.");
+      // Add failure handling here.
+    }
+    ESP.restart();
+  });
+  
   ElegantOTA.begin(&server);
   server.begin();
 }
@@ -136,9 +146,6 @@ void setupWifi() {
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
       Serial.println();
-      
-      
-      timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
   
       lastWifiConnectionAttempt = millis();
     }
@@ -147,6 +154,7 @@ void setupWifi() {
       Serial.println("Wi-Fi Connected");
       Serial.println("IP address: ");
       Serial.println(WiFi.localIP());
+      timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
       printedWifiInfo = true;
     }
   }
@@ -212,7 +220,7 @@ void dataToQueue( void * parameter) {
       }
       dataPoint.timestamp = getMillis();
       int inputValue = readInputs();
-      Serial.println(inputValue);
+      //Serial.println(inputValue);
       dataPoint.value = inputValue;
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
       lastReadTime = micros();  
