@@ -15,6 +15,8 @@
 #define PERIOD_WRITE 10                //WRITING period 
 #define CUTOFFFREQUENCY 35 //in hertz
 
+#define WIFI_RECONNECT_TIMEOUT_S 30
+
 const char* esp_hostname = "ESP32_Seismometer01";
 
 
@@ -120,29 +122,34 @@ void otaSetup() {
   server.begin();
 }
 
-
+unsigned long lastWifiConnectionAttempt = -WIFI_RECONNECT_TIMEOUT_S * 1000; //don't delay first connection attempt
+bool printedWifiInfo = false;
 void setupWifi() {
-  Serial.print("Connecting to ");
-  Serial.println(WIFI_SSID);
+  if (WiFi.status()!= WL_CONNECTED) {
+    if ((unsigned long)(millis() - lastWifiConnectionAttempt) > WIFI_RECONNECT_TIMEOUT_S * 1000) {
+      printedWifiInfo = false;
+      Serial.print("Connecting to ");
+      Serial.println(WIFI_SSID);
+      
+      WiFi.mode(WIFI_STA);
+      WiFi.hostname(esp_hostname);
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    
+      Serial.println();
+      
+      
+      timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
   
-  WiFi.mode(WIFI_STA);
-  WiFi.hostname(esp_hostname);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    esp_task_wdt_reset();
-    Serial.print(".");
-    delay(500);
+      lastWifiConnectionAttempt = millis();
+    }
+  } else {
+    if (!printedWifiInfo){
+      Serial.println("Wi-Fi Connected");
+      Serial.println("IP address: ");
+      Serial.println(WiFi.localIP());
+      printedWifiInfo = true;
+    }
   }
-  Serial.println();
-  Serial.println("Wi-Fi Connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-  
-  timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
-
-  delay(50);
-
 }
 
 void setup() {
