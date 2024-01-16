@@ -121,13 +121,12 @@ void otaSetup() {
   ElegantOTA.onEnd([](bool success) {
     if (success) {
       Serial.println("OTA update completed successfully.");
+      // Add success handling here.
     } else {
       Serial.println("OTA update failed.");
       // Add failure handling here.
     }
-    ESP.restart();
   });
-  
   ElegantOTA.begin(&server);
   server.begin();
 }
@@ -225,6 +224,7 @@ void dataToQueue( void * parameter) {
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
       lastReadTime = micros();  
     }
+    delay(1);
   }
 }
 
@@ -305,6 +305,7 @@ void postToInflux(void * parameter) {
       //Serial.println(dataPoint.timestamp + ": " + dataPoint.value);
       client.writePoint(point);
     }
+    delay(1);
   }
 }
 
@@ -316,9 +317,7 @@ void otaLoop() {
 
 void loop() {
   esp_task_wdt_reset();
-  if (WiFi.status()!= WL_CONNECTED) {
-    setupWifi();
-  }
+  setupWifi();
   otaLoop();
   delay(10);
 }
