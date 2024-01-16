@@ -8,7 +8,7 @@
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 
-#define fwversion 20240116-1658
+#define fwversion "20240116_1658"
 
 #define PERIOD_READ_US 4500
 #define PERIOD_READ_US_FULL 4900 //Reading period 
