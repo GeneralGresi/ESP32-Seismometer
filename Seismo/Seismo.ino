@@ -7,6 +7,8 @@
 #include <ElegantOTA.h>
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
+#include <CircularBuffer.h>
+
 
 #define fwversion "20240116_1658"
 
@@ -102,6 +104,9 @@ InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKE
 WebServer server(80);
 
 
+CircularBuffer<Data,4000> pointBuffer;
+
+
 void syncToNTP() {
   if ((unsigned long)(millis() - lastTimeSyncTime) > 3600000) { //Sync every hour
     timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
@@ -133,6 +138,7 @@ void otaSetup() {
 
 unsigned long lastWifiConnectionAttempt = -WIFI_RECONNECT_TIMEOUT_S * 1000; //don't delay first connection attempt
 bool printedWifiInfo = false;
+bool ntpSynced = false;
 void setupWifi() {
   if (WiFi.status()!= WL_CONNECTED) {
     if ((unsigned long)(millis() - lastWifiConnectionAttempt) > WIFI_RECONNECT_TIMEOUT_S * 1000) {
@@ -154,6 +160,7 @@ void setupWifi() {
       Serial.println("IP address: ");
       Serial.println(WiFi.localIP());
       timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
+      ntpSynced = true;
       printedWifiInfo = true;
     }
   }
@@ -172,11 +179,11 @@ void setup() {
   adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 0, &adc1_chars);
   
-  xQueue = xQueueCreate(500, sizeof(Point));
+  xQueue = xQueueCreate(1000, sizeof(Data));
 
  
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
-  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::MS).batchSize(100).useServerTimestamp(false));
+  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::MS).batchSize(200).useServerTimestamp(false));
   
   lastReadTime=micros();
   lastTimeSyncTime = lastWriteTime = millis();
@@ -213,6 +220,10 @@ void dataToQueue( void * parameter) {
   Data dataPoint;
   while (true) {
     esp_task_wdt_reset();
+    if (!ntpSynced) {
+      
+      continue;
+    }
     if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
       unsigned long delayLeft = PERIOD_READ_US_FULL - (micros() - lastReadTime);
       if (delayLeft < 5000) {
@@ -283,13 +294,11 @@ int readInputs() {
 }
 
 
-
 void postToInflux(void * parameter) {
   esp_task_wdt_add(NULL);
-  const TickType_t xTicksToWait = pdMS_TO_TICKS(100);
+  const TickType_t xTicksToWait = pdMS_TO_TICKS(2);
   BaseType_t xStatus;
-  Point point("Seismometer");
-  point.addTag("device", DEVICE);
+
   while(true) {
     esp_task_wdt_reset();
     syncToNTP();
@@ -298,16 +307,32 @@ void postToInflux(void * parameter) {
     otaLoop();
     
     Data dataPoint;
-    if (WiFi.status()!= WL_CONNECTED) {
-      continue; //don't process the queue if we're not connected.
-    }
+    
     xStatus = xQueueReceive( xQueue, &dataPoint, xTicksToWait );
-    if(xStatus == pdPASS) {
-      point.clearFields();
-      point.addField("reading", dataPoint.value);
-      point.setTime(dataPoint.timestamp);
-      //Serial.println(dataPoint.timestamp + ": " + dataPoint.value);
-      client.writePoint(point);
+    while(xStatus == pdPASS) {
+      esp_task_wdt_reset();
+      pointBuffer.push(dataPoint); //we send it from the queue to a circular buffer, so we can fifo
+      xStatus = xQueueReceive( xQueue, &dataPoint, xTicksToWait );
+    }
+    //Serial.println("Pointbuffer Size: " + String(pointBuffer.size()));
+
+    while (!pointBuffer.isEmpty() && WiFi.status()== WL_CONNECTED) {
+      esp_task_wdt_reset();
+      Data dataPoint = pointBuffer.first();
+      Point seismoPoint("Seismometer");
+      seismoPoint.addTag("device", DEVICE);
+      seismoPoint.addField("reading", dataPoint.value);
+      seismoPoint.setTime(dataPoint.timestamp);
+
+      //Serial.print("Writing: ");
+      //Serial.println(seismoPoint.toLineProtocol());
+      if (!client.writePoint(seismoPoint)) {
+        Serial.print("InfluxDB write failed: ");
+        Serial.println(client.getLastErrorMessage());
+        break;
+      } else {
+        pointBuffer.shift(); //only on success shift it.
+      }
     }
   }
 }
