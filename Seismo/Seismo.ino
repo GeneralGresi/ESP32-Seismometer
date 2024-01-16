@@ -114,7 +114,7 @@ void syncToNTP() {
 void otaSetup() {
 
   server.on("/", []() {
-    server.send(200, "text/plain", "Device: " + String(esp_hostname) + ", Firmware Version: " + String(fwversion));
+    server.send(200, "text/plain", "Device: " + String(esp_hostname) + ", Firmware Version: " + String(fwversion) + ", Wifi Signal: " + String(WiFi.RSSI()));
   });
   
   ElegantOTA.setAuth(otaUser, otaPass);
