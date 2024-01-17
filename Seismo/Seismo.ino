@@ -53,6 +53,12 @@ int totalX100 = 0;
 int totalX10 = 0;
 
 
+bool averageX1000Settled = false;
+bool averageX100Settled = false;
+bool averageX10Settled = false;
+
+
+
 int filteredX10 = 0;
 int filteredX100 = 0;
 int filteredX1000 = 0;
@@ -72,6 +78,9 @@ long avgX1000(int value) {
   readingsX1000[readIndexX1000] = value;           // Add the newest reading to the window
   totalX1000 = totalX1000 + value;                 // Add the newest reading to the sum
   readIndexX1000 = (readIndexX1000+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
+  if (readIndexX1000 == 0 ) { // we wen't one full WINDOW_SIZE around
+    averageX1000Settled = true;
+  }
 
   return totalX1000 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
 }
@@ -81,6 +90,9 @@ long avgX100(int value) {
   readingsX100[readIndexX100] = value;           // Add the newest reading to the window
   totalX100 = totalX100 + value;                 // Add the newest reading to the sum
   readIndexX100 = (readIndexX100+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
+  if (readIndexX100 == 0 ) { // we wen't one full WINDOW_SIZE around
+    averageX100Settled = true;
+  }
 
   return totalX100 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
 }
@@ -90,6 +102,9 @@ long avgX10(int value) {
   readingsX10[readIndexX10] = value;           // Add the newest reading to the window
   totalX10 = totalX10 + value;                 // Add the newest reading to the sum
   readIndexX10 = (readIndexX10+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
+  if (readIndexX10 == 0 ) { // we wen't one full WINDOW_SIZE around
+    averageX10Settled = true;
+  }
 
   return totalX10 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
 }
@@ -231,6 +246,10 @@ void dataToQueue( void * parameter) {
       }
       dataPoint.timestamp = getMillis();
       int inputValue = readInputs();
+      if (inputValue == -1) { //invalid value, continue loop
+        lastReadTime = micros();  
+        continue;
+      }
       //Serial.println(inputValue);
       dataPoint.value = inputValue;
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
@@ -274,13 +293,14 @@ int readInputs() {
   x100 = mapOutMiddle(avgX100(x100),x100); 
 
 
-
-
   int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000,1000);
   x10 = cutOffFilter(x10, filteredX10);
   filteredX10 = x10;
   x10 = mapOutMiddle(avgX10(x10),x10); 
 
+  if (!averageX10Settled || !averageX100Settled || !averageX1000Settled) {
+    return -1; //if the averages are not yet settled, return an invalid value
+  }
 
   if (x1000 >= 1000 || x1000 <= -1000) {
     if (x100 >= 1000 || x100 <= -1000) {
