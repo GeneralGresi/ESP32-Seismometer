@@ -13,8 +13,8 @@
 #define fwversion "20240116_1658"
 
 
-#define PERIOD_READ_US 5000 //Reading period microseconds
-#define CUTOFFFREQUENCY 35 //in hertz
+#define CUTOFFFREQUENCY 35.0 //in hertz
+float PERIOD_READ_US;
 
 #define WIFI_RECONNECT_TIMEOUT_S 30
 
@@ -135,7 +135,8 @@ void syncToNTP() {
 void otaSetup() {
 
   server.on("/", []() {
-    server.send(200, "text/plain", "Device: " + String(esp_hostname) + ", Firmware Version: " + String(fwversion) + ", Wifi Signal: " + String(WiFi.RSSI()));
+    server.send(200, "text/plain", "Device: " + String(esp_hostname) + ", Firmware Version: " + String(fwversion) + ", Wifi Signal: " + String(WiFi.RSSI()) + "\n" + 
+    "Sample Interval: " + String(PERIOD_READ_US) + ", CUTOFFFREQUENCY: " + String(CUTOFFFREQUENCY) + "\n");
   });
   
   ElegantOTA.setAuth(otaUser, otaPass);
@@ -186,6 +187,9 @@ void setup() {
   Serial.begin(500000);
   setupWifi();
   otaSetup();
+  float sampleFrequency =  float(CUTOFFFREQUENCY) * 4.0;
+  PERIOD_READ_US = ((1.0/float(sampleFrequency)) * 1000.0 * 1000.0); //Reading period microseconds
+
 
   float tau = 1.0 / (2.0 * PI * (float)CUTOFFFREQUENCY);
   float readPeriodInSeconds = PERIOD_READ_US / 1000.0 / 1000.0;
@@ -240,7 +244,7 @@ void dataToQueue( void * parameter) {
       
       continue;
     }
-    if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US - 500) {
+    if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US * 0.95) {
       unsigned long delayLeft = PERIOD_READ_US - (micros() - lastReadTime);
       if (delayLeft < PERIOD_READ_US) {
         delayMicroseconds(delayLeft);
