@@ -12,12 +12,13 @@
 
 #define fwversion "20240116_1658"
 
-#define PERIOD_READ_US 4500
-#define PERIOD_READ_US_FULL 5000 //Reading period 
-#define PERIOD_WRITE 10                //WRITING period 
+
+#define PERIOD_READ_US 5000 //Reading period microseconds
 #define CUTOFFFREQUENCY 35 //in hertz
 
 #define WIFI_RECONNECT_TIMEOUT_S 30
+
+#define TIME_SYNC_INTERVAL_S 300
 
 const char* esp_hostname = "ESP32_Seismometer01";
 
@@ -123,7 +124,7 @@ CircularBuffer<Data,4000> pointBuffer;
 
 
 void syncToNTP() {
-  if ((unsigned long)(millis() - lastTimeSyncTime) > 3600000) { //Sync every hour
+  if ((unsigned long)(millis() - lastTimeSyncTime) > TIME_SYNC_INTERVAL_S * 1000) {
     timeSync(TZ_INFO, "0.at.pool.ntp.org", "1.at.pool.ntp.org");
     lastTimeSyncTime = millis();
   }
@@ -187,7 +188,7 @@ void setup() {
   otaSetup();
 
   float tau = 1.0 / (2.0 * PI * (float)CUTOFFFREQUENCY);
-  float readPeriodInSeconds = PERIOD_READ_US_FULL / 1000.0 / 1000.0;
+  float readPeriodInSeconds = PERIOD_READ_US / 1000.0 / 1000.0;
   alpha = readPeriodInSeconds / (readPeriodInSeconds + tau); 
   
   adc1_config_width(ADC_WIDTH_BIT_12);
@@ -198,7 +199,7 @@ void setup() {
 
  
   client.setHTTPOptions(HTTPOptions().connectionReuse(true));
-  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::MS).batchSize(200).useServerTimestamp(false));
+  client.setWriteOptions(WriteOptions().writePrecision(WritePrecision::MS).batchSize(50).useServerTimestamp(false));
   
   lastReadTime=micros();
   lastTimeSyncTime = lastWriteTime = millis();
@@ -239,21 +240,20 @@ void dataToQueue( void * parameter) {
       
       continue;
     }
-    if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
-      unsigned long delayLeft = PERIOD_READ_US_FULL - (micros() - lastReadTime);
-      if (delayLeft < PERIOD_READ_US_FULL) {
+    if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US - 500) {
+      unsigned long delayLeft = PERIOD_READ_US - (micros() - lastReadTime);
+      if (delayLeft < PERIOD_READ_US) {
         delayMicroseconds(delayLeft);
       }
       dataPoint.timestamp = getMillis();
       int inputValue = readInputs();
+      lastReadTime = micros();  
       if (inputValue == -1) { //invalid value, continue loop
-        lastReadTime = micros();  
         continue;
       }
       //Serial.println(inputValue);
       dataPoint.value = inputValue;
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
-      lastReadTime = micros();  
     }
   }
 }
