@@ -41,24 +41,9 @@ typedef struct{
 esp_adc_cal_characteristics_t adc1_chars;
 
 
-const int WINDOW_SIZE  = 500;
-
-float readingsX1000 [WINDOW_SIZE];
-float readingsX100 [WINDOW_SIZE];
-float readingsX10 [WINDOW_SIZE];
-int readIndexX1000  = 0;
-int readIndexX100  = 0;
-int readIndexX10 = 0;
-float totalX1000 = 0.0;
-float totalX100 = 0.0;
-float totalX10 = 0.0;
-
-
-bool averageX1000Settled = false;
-bool averageX100Settled = false;
-bool averageX10Settled = false;
-
-
+float offsetX10 = -75.0;
+float offsetX100 = -75.0;
+float offsetX1000 = -75.0;
 
 float filteredX10 = 0;
 float filteredX100 = 0;
@@ -72,44 +57,6 @@ unsigned long lastTimeSyncTime;
 
 float alpha; //for lowpass;
   
-
-
-float avgX1000(float value) {
-  totalX1000 = totalX1000 - readingsX1000[readIndexX1000];       // Remove the oldest entry from the sum
-  readingsX1000[readIndexX1000] = value;           // Add the newest reading to the window
-  totalX1000 = totalX1000 + value;                 // Add the newest reading to the sum
-  readIndexX1000 = (readIndexX1000+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
-  if (readIndexX1000 == 0 ) { // we wen't one full WINDOW_SIZE around
-    averageX1000Settled = true;
-  }
-
-  return totalX1000 / float(WINDOW_SIZE);      // Divide the sum of the window by the window size for the resul
-}
-
-float avgX100(float value) {
-  totalX100 = totalX100 - readingsX100[readIndexX100];       // Remove the oldest entry from the sum
-  readingsX100[readIndexX100] = value;           // Add the newest reading to the window
-  totalX100 = totalX100 + value;                 // Add the newest reading to the sum
-  readIndexX100 = (readIndexX100+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
-  if (readIndexX100 == 0 ) { // we wen't one full WINDOW_SIZE around
-    averageX100Settled = true;
-  }
-
-  return totalX100 / float(WINDOW_SIZE);      // Divide the sum of the window by the window size for the resul
-}
-
-float avgX10(float value) {
-  totalX10 = totalX10 - readingsX10[readIndexX10];       // Remove the oldest entry from the sum
-  readingsX10[readIndexX10] = value;           // Add the newest reading to the window
-  totalX10 = totalX10 + value;                 // Add the newest reading to the sum
-  readIndexX10 = (readIndexX10+1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
-  if (readIndexX10 == 0 ) { // we wen't one full WINDOW_SIZE around
-    averageX10Settled = true;
-  }
-
-  return totalX10 / float(WINDOW_SIZE);      // Divide the sum of the window by the window size for the resul
-}
-
 
 TaskHandle_t Task1;
 TaskHandle_t Task2;
@@ -252,9 +199,7 @@ void dataToQueue( void * parameter) {
       dataPoint.timestamp = getMillis();
       int inputValue = int(readInputs());
       lastReadTime = micros();  
-      if (inputValue == -1) { //invalid value, continue loop
-        continue;
-      }
+      
       //Serial.println(inputValue);
       dataPoint.value = inputValue;
       xStatus = xQueueSendToBack( xQueue, &dataPoint, xTicksToWait );
@@ -291,24 +236,20 @@ float readInputs() {
   float x1000  =  mapfloat(float(adc1_get_raw(ADC1_CHANNEL_0)),0.0,4095.0,-1000.0,1000.0);
   x1000 = cutOffFilter(x1000, filteredX1000);
   filteredX1000 = x1000;
-  x1000 = mapOutMiddle(avgX1000(x1000),x1000); 
+  x1000 = mapOutMiddle(offsetX10,x1000); 
 
 
   
   float x100   =  mapfloat(float(adc1_get_raw(ADC1_CHANNEL_3)),0.0,4095.0,-1000.0,1000.0);
   x100 = cutOffFilter(x100, filteredX100);
   filteredX100 = x100;
-  x100 = mapOutMiddle(avgX100(x100),x100); 
+  x100 = mapOutMiddle(offsetX100,x100); 
 
 
   float x10    =  mapfloat(float(adc1_get_raw(ADC1_CHANNEL_6)),0.0,4095.0,-1000.0,1000.0);
   x10 = cutOffFilter(x10, filteredX10);
   filteredX10 = x10;
-  x10 = mapOutMiddle(avgX10(x10),x10); 
-
-  if (!averageX10Settled || !averageX100Settled || !averageX1000Settled) {
-    return -1; //if the averages are not yet settled, return an invalid value
-  }
+  x10 = mapOutMiddle(offsetX1000,x10); 
 
   if (x1000 >= 750 || x1000 <= -750) {
     if (x100 >= 750 || x100 <= -750) {
