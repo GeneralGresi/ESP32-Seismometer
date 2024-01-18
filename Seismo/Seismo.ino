@@ -43,15 +43,15 @@ esp_adc_cal_characteristics_t adc1_chars;
 
 const int WINDOW_SIZE  = 500;
 
-int readingsX1000 [WINDOW_SIZE];
-int readingsX100 [WINDOW_SIZE];
-int readingsX10 [WINDOW_SIZE];
+float readingsX1000 [WINDOW_SIZE];
+float readingsX100 [WINDOW_SIZE];
+float readingsX10 [WINDOW_SIZE];
 int readIndexX1000  = 0;
 int readIndexX100  = 0;
 int readIndexX10 = 0;
-int totalX1000 = 0;
-int totalX100 = 0;
-int totalX10 = 0;
+float totalX1000 = 0.0;
+float totalX100 = 0.0;
+float totalX10 = 0.0;
 
 
 bool averageX1000Settled = false;
@@ -60,9 +60,9 @@ bool averageX10Settled = false;
 
 
 
-int filteredX10 = 0;
-int filteredX100 = 0;
-int filteredX1000 = 0;
+float filteredX10 = 0;
+float filteredX100 = 0;
+float filteredX1000 = 0;
 
 
 
@@ -74,7 +74,7 @@ float alpha; //for lowpass;
   
 
 
-long avgX1000(int value) {
+float avgX1000(float value) {
   totalX1000 = totalX1000 - readingsX1000[readIndexX1000];       // Remove the oldest entry from the sum
   readingsX1000[readIndexX1000] = value;           // Add the newest reading to the window
   totalX1000 = totalX1000 + value;                 // Add the newest reading to the sum
@@ -83,10 +83,10 @@ long avgX1000(int value) {
     averageX1000Settled = true;
   }
 
-  return totalX1000 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
+  return totalX1000 / float(WINDOW_SIZE);      // Divide the sum of the window by the window size for the resul
 }
 
-long avgX100(int value) {
+float avgX100(float value) {
   totalX100 = totalX100 - readingsX100[readIndexX100];       // Remove the oldest entry from the sum
   readingsX100[readIndexX100] = value;           // Add the newest reading to the window
   totalX100 = totalX100 + value;                 // Add the newest reading to the sum
@@ -95,10 +95,10 @@ long avgX100(int value) {
     averageX100Settled = true;
   }
 
-  return totalX100 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
+  return totalX100 / float(WINDOW_SIZE);      // Divide the sum of the window by the window size for the resul
 }
 
-long avgX10(int value) {
+float avgX10(float value) {
   totalX10 = totalX10 - readingsX10[readIndexX10];       // Remove the oldest entry from the sum
   readingsX10[readIndexX10] = value;           // Add the newest reading to the window
   totalX10 = totalX10 + value;                 // Add the newest reading to the sum
@@ -107,7 +107,7 @@ long avgX10(int value) {
     averageX10Settled = true;
   }
 
-  return totalX10 / WINDOW_SIZE;      // Divide the sum of the window by the window size for the resul
+  return totalX10 / float(WINDOW_SIZE);      // Divide the sum of the window by the window size for the resul
 }
 
 
@@ -250,7 +250,7 @@ void dataToQueue( void * parameter) {
         delayMicroseconds(delayLeft);
       }
       dataPoint.timestamp = getMillis();
-      int inputValue = readInputs();
+      int inputValue = int(readInputs());
       lastReadTime = micros();  
       if (inputValue == -1) { //invalid value, continue loop
         continue;
@@ -270,34 +270,38 @@ unsigned long long getMillis() {
 }
 
 
-int mapOutMiddle(int middle, int value) {
+float mapfloat(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
+float mapOutMiddle(float middle, float value) {
   if (value <= middle) {
-    return map(value, -1000, middle, -1000 , 0);
+    return mapfloat(value, -1000.0, middle, -1000.0 , 0.0);
   } else {
-    return map(value, middle, 1000, 0, 1000);
+    return mapfloat(value, middle, 1000.0, 0.0, 1000.0);
   }
 }
 
-int cutOffFilter(int raw, int filteredValue) {
+float cutOffFilter(float raw, float filteredValue) {
   return (float)alpha * (float)raw + (float)(1.0 - alpha) * (float)filteredValue;
 }
 
-int readInputs() {
-  int x1000  =  map(adc1_get_raw(ADC1_CHANNEL_0),0,4095,-1000,1000);
-  
+float readInputs() {
+  float x1000  =  mapfloat(float(adc1_get_raw(ADC1_CHANNEL_0)),0.0,4095.0,-1000.0,1000.0);
   x1000 = cutOffFilter(x1000, filteredX1000);
   filteredX1000 = x1000;
   x1000 = mapOutMiddle(avgX1000(x1000),x1000); 
 
 
   
-  int x100   =  map(adc1_get_raw(ADC1_CHANNEL_3),0,4095,-1000,1000);
+  float x100   =  mapfloat(float(adc1_get_raw(ADC1_CHANNEL_3)),0.0,4095.0,-1000.0,1000.0);
   x100 = cutOffFilter(x100, filteredX100);
   filteredX100 = x100;
   x100 = mapOutMiddle(avgX100(x100),x100); 
 
 
-  int x10    =  map(adc1_get_raw(ADC1_CHANNEL_6),0,4095,-1000,1000);
+  float x10    =  mapfloat(float(adc1_get_raw(ADC1_CHANNEL_6)),0.0,4095.0,-1000.0,1000.0);
   x10 = cutOffFilter(x10, filteredX10);
   filteredX10 = x10;
   x10 = mapOutMiddle(avgX10(x10),x10); 
@@ -306,11 +310,11 @@ int readInputs() {
     return -1; //if the averages are not yet settled, return an invalid value
   }
 
-  if (x1000 >= 1000 || x1000 <= -1000) {
-    if (x100 >= 1000 || x100 <= -1000) {
-      return x10*100;
+  if (x1000 >= 750 || x1000 <= -750) {
+    if (x100 >= 750 || x100 <= -750) {
+      return x10*100.0;
     } else {
-      return x100*10;
+      return x100*10.0;
     }
   } else {
     return x1000;
