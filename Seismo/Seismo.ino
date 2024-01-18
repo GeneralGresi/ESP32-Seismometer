@@ -240,7 +240,7 @@ void dataToQueue( void * parameter) {
       continue;
     }
     if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
-      unsigned long delayLeft = PERIOD_READ_US_FULL - 100 - (micros() - lastReadTime);
+      unsigned long delayLeft = PERIOD_READ_US_FULL - (micros() - lastReadTime);
       if (delayLeft < PERIOD_READ_US_FULL) {
         delayMicroseconds(delayLeft);
       }
