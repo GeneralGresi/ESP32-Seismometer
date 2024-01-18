@@ -13,7 +13,7 @@
 #define fwversion "20240116_1658"
 
 #define PERIOD_READ_US 4500
-#define PERIOD_READ_US_FULL 4900 //Reading period 
+#define PERIOD_READ_US_FULL 5000 //Reading period 
 #define PERIOD_WRITE 10                //WRITING period 
 #define CUTOFFFREQUENCY 35 //in hertz
 
@@ -240,8 +240,8 @@ void dataToQueue( void * parameter) {
       continue;
     }
     if ((unsigned long)(micros() - lastReadTime) >= PERIOD_READ_US) {
-      unsigned long delayLeft = PERIOD_READ_US_FULL - (micros() - lastReadTime);
-      if (delayLeft < 5000) {
+      unsigned long delayLeft = PERIOD_READ_US_FULL - 100 - (micros() - lastReadTime);
+      if (delayLeft < PERIOD_READ_US_FULL) {
         delayMicroseconds(delayLeft);
       }
       dataPoint.timestamp = getMillis();
