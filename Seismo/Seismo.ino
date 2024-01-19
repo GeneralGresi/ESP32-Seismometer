@@ -9,36 +9,29 @@
 #include "esp_adc_cal.h"
 #include <CircularBuffer.h>
 
-
 #define fwversion "20240116_1658"
 
-
 #define CUTOFFFREQUENCY 35.0 //in hertz
-float PERIOD_READ_US;
-
 #define WIFI_RECONNECT_TIMEOUT_S 30
-
 #define TIME_SYNC_INTERVAL_S 300
+#define TZ_INFO "CET-1CEST,M3.5.0,M10.5.0/3"
 
 const char* esp_hostname = "ESP32_Seismometer01";
-
-
 #define DEVICE "Sensor01"
-
-#define TZ_INFO "CET-1CEST,M3.5.0,M10.5.0/3"
 
 
 #define inputPinX1000 36
 #define inputPinX100 39
 #define inputPinX10 34
 
+
+
 typedef struct{
    unsigned long long timestamp;
    int value;
 }Data;
 
-
-esp_adc_cal_characteristics_t adc1_chars;
+CircularBuffer<Data,4000> pointBuffer;
 
 
 float offsetX10 = -75.0;
@@ -49,26 +42,22 @@ float filteredX10 = 0;
 float filteredX100 = 0;
 float filteredX1000 = 0;
 
-
+float PERIOD_READ_US;
 
 unsigned long lastReadTime;
 unsigned long lastWriteTime;
 unsigned long lastTimeSyncTime;
 
 float alpha; //for lowpass;
-  
 
 TaskHandle_t Task1;
 TaskHandle_t Task2;
 xQueueHandle xQueue;
 
+esp_adc_cal_characteristics_t adc1_chars;
+
 InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN);
-
 WebServer server(80);
-
-
-CircularBuffer<Data,4000> pointBuffer;
-
 
 void syncToNTP() {
   if ((unsigned long)(millis() - lastTimeSyncTime) > TIME_SYNC_INTERVAL_S * 1000) {
