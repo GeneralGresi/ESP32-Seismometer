@@ -1,6 +1,15 @@
 This is a DIY Project for building a simple 3D Printable Seismometer, interfacing to InfluxDB/Grafana via an ESP32.
 
 
+POC:
+Recorded a quake, Richter 4.5, about 130km away
+
+https://www.zamg.ac.at/cms/de/geophysik/erdbeben/aktuelle-erdbeben/karten-und-listen/bebendetails/austria/quakes/evid53139145
+
+![Screenshot_20240202_125456](https://github.com/GeneralGresi/ESP32-Seismometer/assets/59047588/2d47d98b-94fb-4b8d-ba29-302a7c182986)
+
+
+
 The main principal is a magnet on a spring. Each "movement" will cause the magnet to swing, therefore inducing a voltage/current in a coil. 
 
 ![Screenshot_20240114_125006](https://github.com/GeneralGresi/ESP32-Seismometer/assets/59047588/cd93e05b-07b3-4128-9e7b-05ccd3b6f8b3)
